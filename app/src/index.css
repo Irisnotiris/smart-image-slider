@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cream text-slate-900 font-sans;
+    /* Optional: Add a subtle paper texture */
+    background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@layer components {
+  .btn-hand {
+    @apply px-6 py-3 bg-white border-2 border-black rounded-xl font-bold transition-all shadow-hard active:translate-x-[2px] active:translate-y-[2px] active:shadow-hard-active hover:-translate-y-1 hover:shadow-hard-hover;
+  }
+
+  .card-hand {
+    @apply bg-white border-2 border-black rounded-2xl shadow-hard;
+  }
+
+  .input-hand {
+    @apply w-full px-4 py-2 bg-white border-2 border-slate-300 rounded-lg focus:border-black focus:outline-none focus:ring-0 transition-colors font-medium;
+  }
+}
