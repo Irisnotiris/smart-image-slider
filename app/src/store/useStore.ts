@@ -35,7 +35,7 @@ export const useStore = create<AppState>((set) => ({
     step: 'upload',
     grid: {
         rows: 4,
-        cols: 6,
+        cols: 4,
         inset: 0,
     },
     crop: { x: 0, y: 0, w: 100, h: 100 },
@@ -55,7 +55,7 @@ export const useStore = create<AppState>((set) => ({
             file: null,
             imageUrl: null,
             step: 'upload',
-            grid: { rows: 4, cols: 6, inset: 0 },
+            grid: { rows: 4, cols: 4, inset: 0 },
             crop: { x: 0, y: 0, w: 100, h: 100 },
             gridLines: { v: [], h: [] }
         };

@@ -27,6 +27,7 @@ export const SliceGallery: React.FC = () => {
     const [enableMatting, setEnableMatting] = useState(false);
     const [enableStroke, setEnableStroke] = useState(false);
     const [strokeWidth, setStrokeWidth] = useState(6);
+    const [filter, setFilter] = useState<string | null>(null);
 
     // UI
     const [isExporting, setIsExporting] = useState(false);
@@ -119,7 +120,7 @@ export const SliceGallery: React.FC = () => {
         setSlices(prev => prev.map(s => ({ ...s, status: 'pending' })));
         setProcessingIndex(null); // Stop current
 
-    }, [enableMatting, enableStroke, strokeWidth]);
+    }, [enableMatting, enableStroke, strokeWidth, filter]);
 
     // 3. Queue Loop: Finder
     useEffect(() => {
@@ -201,7 +202,8 @@ export const SliceGallery: React.FC = () => {
             removeWhite: matting,
             addStroke: stroke,
             strokeWidth: strokeWidth,
-            strokeColor: 'white'
+            strokeColor: '#FFFFFF',
+            filter: filter
         });
     };
 
@@ -289,6 +291,25 @@ export const SliceGallery: React.FC = () => {
                             />
                         </div>
                     )}
+
+                    {/* Filter Dropdown */}
+                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl border-2 border-black">
+                        <span className="text-xs text-black font-bold">滤镜:</span>
+                        <select
+                            value={filter || ''}
+                            onChange={(e) => setFilter(e.target.value || null)}
+                            className="px-3 py-1 rounded-lg border-2 border-black bg-white text-sm font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-black"
+                        >
+                            <option value="">无</option>
+                            <option value="grayscale">🖤 黑白</option>
+                            <option value="sepia">📸 怀旧</option>
+                            <option value="brightness">☀️ 增亮</option>
+                            <option value="vibrant">🌈 鲜艳</option>
+                            <option value="cinematic">🎬 电影感</option>
+                            <option value="japanese">🌸 日系</option>
+                            <option value="warm">🔥 暖色调</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Right / Progress */}
