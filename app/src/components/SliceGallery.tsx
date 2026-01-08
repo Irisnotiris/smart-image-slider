@@ -109,7 +109,7 @@ export const SliceGallery: React.FC = () => {
     // 2. Queue Manager: Assign tasks
     useEffect(() => {
         // If Config Disabled: clear processed
-        if (!enableMatting && !enableStroke) {
+        if (!enableMatting && !enableStroke && !filter) {
             setSlices(prev => prev.map(s => ({ ...s, status: 'idle', processedSrc: undefined })));
             setProcessingIndex(null);
             return;
@@ -126,13 +126,13 @@ export const SliceGallery: React.FC = () => {
     useEffect(() => {
         // Only look for work if NOT currently processing
         if (processingIndex !== null) return;
-        if (!enableMatting && !enableStroke) return;
+        if (!enableMatting && !enableStroke && !filter) return;
 
         const nextIndex = slices.findIndex(s => s.status === 'pending');
         if (nextIndex !== -1) {
             setProcessingIndex(nextIndex);
         }
-    }, [slices, processingIndex, enableMatting, enableStroke, strokeWidth]);
+    }, [slices, processingIndex, enableMatting, enableStroke, strokeWidth, filter]);
 
     // 4. Queue Loop: Processor
     // We separate Finder and Processor to ensure state updates propagate.
@@ -214,7 +214,7 @@ export const SliceGallery: React.FC = () => {
                 updated[selectedSliceIndex] = {
                     ...updated[selectedSliceIndex],
                     originalSrc: newSrc,
-                    status: (enableMatting || enableStroke) ? 'pending' : 'idle'
+                    status: (enableMatting || enableStroke || filter) ? 'pending' : 'idle'
                 };
                 return updated;
             });
