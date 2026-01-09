@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { Download, Wand2, PenTool, Loader2, Clock, X, Edit2 } from 'lucide-react';
 import JSZip from 'jszip';
@@ -28,6 +28,7 @@ export const SliceGallery: React.FC = () => {
     const [enableStroke, setEnableStroke] = useState(false);
     const [strokeWidth, setStrokeWidth] = useState(6);
     const [filter, setFilter] = useState<string | null>(null);
+    const [exportSize, setExportSize] = useState<number | null>(null); // null = original, 240 = WeChat, 512 = Telegram
 
     // UI
     const [isExporting, setIsExporting] = useState(false);
@@ -105,11 +106,22 @@ export const SliceGallery: React.FC = () => {
         return () => clearTimeout(timeout);
     }, [imageUrl, gridLines, crop]);
 
+    const processSingleSlice = useCallback(async (src: string, matting: boolean, stroke: boolean) => {
+        // Use the new Canvas Processor (Instant & Organic Stroke)
+        return await processImage(src, {
+            removeWhite: matting,
+            addStroke: stroke,
+            strokeWidth: strokeWidth,
+            strokeColor: '#FFFFFF',
+            filter: filter,
+            exportSize: exportSize
+        });
+    }, [strokeWidth, filter, exportSize, enableMatting, enableStroke]);
 
     // 2. Queue Manager: Assign tasks
     useEffect(() => {
         // If Config Disabled: clear processed
-        if (!enableMatting && !enableStroke && !filter) {
+        if (!enableMatting && !enableStroke && !filter && !exportSize) {
             setSlices(prev => prev.map(s => ({ ...s, status: 'idle', processedSrc: undefined })));
             setProcessingIndex(null);
             return;
@@ -120,19 +132,19 @@ export const SliceGallery: React.FC = () => {
         setSlices(prev => prev.map(s => ({ ...s, status: 'pending' })));
         setProcessingIndex(null); // Stop current
 
-    }, [enableMatting, enableStroke, strokeWidth, filter]);
+    }, [enableMatting, enableStroke, strokeWidth, filter, exportSize]);
 
     // 3. Queue Loop: Finder
     useEffect(() => {
         // Only look for work if NOT currently processing
         if (processingIndex !== null) return;
-        if (!enableMatting && !enableStroke && !filter) return;
+        if (!enableMatting && !enableStroke && !filter && !exportSize) return;
 
         const nextIndex = slices.findIndex(s => s.status === 'pending');
         if (nextIndex !== -1) {
             setProcessingIndex(nextIndex);
         }
-    }, [slices, processingIndex, enableMatting, enableStroke, strokeWidth, filter]);
+    }, [slices, processingIndex, enableMatting, enableStroke, strokeWidth, filter, exportSize]);
 
     // 4. Queue Loop: Processor
     // We separate Finder and Processor to ensure state updates propagate.
@@ -193,19 +205,9 @@ export const SliceGallery: React.FC = () => {
         execute();
 
         return () => { isMounted = false; };
-    }, [processingIndex]); // Only re-run when index changes. NOT when slices changes (avoids loop).
+    }, [processingIndex, processSingleSlice]); // Removed 'slices' to prevent loop. Only trigger when a NEW index is assigned.
 
 
-    const processSingleSlice = async (src: string, matting: boolean, stroke: boolean) => {
-        // Use the new Canvas Processor (Instant & Organic Stroke)
-        return await processImage(src, {
-            removeWhite: matting,
-            addStroke: stroke,
-            strokeWidth: strokeWidth,
-            strokeColor: '#FFFFFF',
-            filter: filter
-        });
-    };
 
     const handleUpdateSlice = (newSrc: string) => {
         if (selectedSliceIndex !== null) {
@@ -214,7 +216,7 @@ export const SliceGallery: React.FC = () => {
                 updated[selectedSliceIndex] = {
                     ...updated[selectedSliceIndex],
                     originalSrc: newSrc,
-                    status: (enableMatting || enableStroke || filter) ? 'pending' : 'idle'
+                    status: (enableMatting || enableStroke || filter || exportSize) ? 'pending' : 'idle'
                 };
                 return updated;
             });
@@ -245,54 +247,55 @@ export const SliceGallery: React.FC = () => {
 
     return (
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 h-full flex-1 min-h-0 p-4">
-            <div className="flex flex-wrap items-center justify-between card-hand bg-white p-4 shrink-0 gap-4">
-                {/* Left Controls */}
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => setStep('editor')}
-                        className="text-slate-500 hover:text-black hover:underline transition-colors font-bold px-4"
-                    >
-                        ← 返回
-                    </button>
-                </div>
+            <div className="flex flex-col gap-4 card-hand bg-white p-4 shrink-0">
+                {/* Row 1: Primary Controls */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => setStep('editor')}
+                            className="text-slate-500 hover:text-black hover:underline transition-colors font-bold pr-4 border-r-2 border-slate-200"
+                        >
+                            ← 返回
+                        </button>
 
-                {/* Center Config */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setEnableMatting(!enableMatting)}
-                        className={cn(
-                            "btn-hand py-2 px-4 shadow-hard-sm",
-                            enableMatting ? "bg-primary-pink text-white" : "bg-white text-slate-700"
-                        )}
-                    >
-                        <Wand2 className="w-4 h-4 mr-2 inline" />
-                        智能抠图
-                    </button>
-                    <button
-                        onClick={() => setEnableStroke(!enableStroke)}
-                        className={cn(
-                            "btn-hand py-2 px-4 shadow-hard-sm",
-                            enableStroke ? "bg-primary-blue text-white" : "bg-white text-slate-700"
-                        )}
-                    >
-                        <PenTool className="w-4 h-4 mr-2 inline" />
-                        描边
-                    </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setEnableMatting(!enableMatting)}
+                                className={cn(
+                                    "btn-hand py-2 px-4 shadow-hard-sm",
+                                    enableMatting ? "bg-primary-pink text-white" : "bg-white text-slate-700"
+                                )}
+                            >
+                                <Wand2 className="w-4 h-4 mr-2 inline" />
+                                智能抠图
+                            </button>
+                            <button
+                                onClick={() => setEnableStroke(!enableStroke)}
+                                className={cn(
+                                    "btn-hand py-2 px-4 shadow-hard-sm",
+                                    enableStroke ? "bg-primary-blue text-white" : "bg-white text-slate-700"
+                                )}
+                            >
+                                <PenTool className="w-4 h-4 mr-2 inline" />
+                                描边
+                            </button>
 
-                    {enableStroke && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl border-2 border-black animate-in fade-in slide-in-from-left-2">
-                            <span className="text-xs text-black font-bold w-12">宽度: {strokeWidth}</span>
-                            <input
-                                type="range"
-                                min="1" max="20"
-                                value={strokeWidth}
-                                onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
-                                className="w-20 h-2 bg-slate-300 rounded-full appearance-none cursor-pointer accent-black border border-black"
-                            />
+                            {enableStroke && (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl border-2 border-black animate-in fade-in slide-in-from-left-2">
+                                    <span className="text-xs text-black font-bold w-12">宽度: {strokeWidth}</span>
+                                    <input
+                                        type="range"
+                                        min="1" max="20"
+                                        value={strokeWidth}
+                                        onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
+                                        className="w-20 h-2 bg-slate-300 rounded-full appearance-none cursor-pointer accent-black border border-black"
+                                    />
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Filter Dropdown */}
+                    {/* Filter Dropdown (End of Row 1) */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl border-2 border-black">
                         <span className="text-xs text-black font-bold">滤镜:</span>
                         <select
@@ -312,22 +315,41 @@ export const SliceGallery: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Right / Progress */}
-                <div className="flex items-center gap-4 ml-auto">
-                    {(pendingCount > 0 || processingIndex !== null) && (
-                        <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-100 px-4 py-2 rounded-lg border-2 border-blue-200 font-bold">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>处理中 {doneCount} / {totalCount}</span>
+                {/* Divider Line */}
+                <div className="h-0.5 bg-black/5 w-full" />
+
+                {/* Row 2: Export Settings & Action */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        {/* Export Size Dropdown */}
+                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl border-2 border-black">
+                            <span className="text-xs text-black font-bold">输出尺寸:</span>
+                            <select
+                                value={exportSize || ''}
+                                onChange={(e) => setExportSize(e.target.value ? parseInt(e.target.value) : null)}
+                                className="px-3 py-1 rounded-lg border-2 border-black bg-white text-sm font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-black"
+                            >
+                                <option value="">原始尺寸</option>
+                                <option value="240">💬 微信表情 (240x240)</option>
+                                <option value="512">📱 Telegram / Discord (512x512)</option>
+                            </select>
                         </div>
-                    )}
+
+                        {(pendingCount > 0 || processingIndex !== null) && (
+                            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-100 px-4 py-2 rounded-lg border-2 border-blue-200 font-bold">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>同步处理中 {doneCount} / {totalCount}</span>
+                            </div>
+                        )}
+                    </div>
 
                     <button
                         onClick={handleExport}
                         disabled={isExporting || pendingCount > 0 || processingIndex !== null}
-                        className="btn-hand bg-primary-green hover:bg-green-400 text-black disabled:opacity-50 disabled:shadow-none"
+                        className="btn-hand bg-primary-green hover:bg-green-400 text-black disabled:opacity-50 disabled:shadow-none min-w-[140px]"
                     >
                         <Download className="w-5 h-5 mr-2 inline" />
-                        {isExporting ? '打包中...' : '导出 ZIP'}
+                        {isExporting ? '打包中...' : '下载全部 ZIP'}
                     </button>
                 </div>
             </div>

@@ -5,6 +5,7 @@ export interface ProcessConfig {
     strokeWidth?: number;
     strokeColor?: string;
     filter?: string | null;
+    exportSize?: number | null; // Target size (width/height), null = original
 }
 
 const loadImage = (src: string): Promise<HTMLImageElement> => {
@@ -164,7 +165,7 @@ const applyFilter = (ctx: CanvasRenderingContext2D, width: number, height: numbe
 
 export const processImage = async (src: string, config: ProcessConfig): Promise<string> => {
     const img = await loadImage(src);
-    const canvas = document.createElement('canvas');
+    let canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error("No Context");
 
@@ -267,80 +268,7 @@ export const processImage = async (src: string, config: ProcessConfig): Promise<
         applyFilter(ctx, canvas.width, canvas.height, config.filter);
     }
 
-    // 4. Add Smooth Stroke (Shadow Method)
-    if (config.removeWhite) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        const width = canvas.width;
-        const height = canvas.height;
 
-        // BFS Queue for Flood Fill
-        // We'll store indices (y * width + x)
-        const queue: number[] = [];
-        const visited = new Uint8Array(width * height); // 0 = unvisited, 1 = visited
-
-        // Check if pixel at (x,y) is white-ish OR transparent (traversable)
-        const shouldVisit = (idx: number) => {
-            const r = data[idx * 4];
-            const g = data[idx * 4 + 1];
-            const b = data[idx * 4 + 2];
-            const a = data[idx * 4 + 3];
-
-            // IF it's transparent, we can swim through it (it's background)
-            if (a < 20) return true;
-
-            // IF it's solid, it must be white to be considered background
-            return r > 240 && g > 240 && b > 240;
-        };
-
-        // Seed with border pixels
-        // Top & Bottom rows
-        for (let x = 0; x < width; x++) {
-            const idxTop = x;
-            const idxBottom = (height - 1) * width + x;
-            if (shouldVisit(idxTop)) { queue.push(idxTop); visited[idxTop] = 1; }
-            if (shouldVisit(idxBottom)) { queue.push(idxBottom); visited[idxBottom] = 1; }
-        }
-        // Left & Right cols
-        for (let y = 0; y < height; y++) {
-            const idxLeft = y * width;
-            const idxRight = y * width + (width - 1);
-            if (visited[idxLeft] === 0 && shouldVisit(idxLeft)) { queue.push(idxLeft); visited[idxLeft] = 1; }
-            if (visited[idxRight] === 0 && shouldVisit(idxRight)) { queue.push(idxRight); visited[idxRight] = 1; }
-        }
-
-        // Process Queue
-        let head = 0;
-        while (head < queue.length) {
-            const idx = queue[head++];
-
-            // "Remove" pixel (set alpha to 0)
-            data[idx * 4 + 3] = 0;
-
-            const cx = idx % width;
-            // Unused: const cy = Math.floor(idx / width);
-
-            // Neighbors (Up, Down, Left, Right)
-            const neighbors = [
-                idx - width, // Up
-                idx + width, // Down
-                (cx > 0) ? idx - 1 : -1, // Left
-                (cx < width - 1) ? idx + 1 : -1 // Right
-            ];
-
-            for (const nIdx of neighbors) {
-                if (nIdx >= 0 && nIdx < visited.length && visited[nIdx] === 0) {
-                    // Check if neighbor is background (white or transparent)
-                    if (shouldVisit(nIdx)) {
-                        visited[nIdx] = 1;
-                        queue.push(nIdx);
-                    }
-                }
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-    }
 
     // 4. Add Smooth Stroke (Shadow Method)
     if (config.addStroke) {
@@ -386,7 +314,41 @@ export const processImage = async (src: string, config: ProcessConfig): Promise<
         // Composite original image on top
         fCtx.drawImage(canvas, 0, 0);
 
-        return fCanvas.toDataURL('image/png');
+        // Update working canvas to result of stroke
+        canvas = fCanvas;
+    }
+
+    // 5. Resize to target export size (if specified)
+    if (config.exportSize) {
+        const targetSize = config.exportSize;
+        const currentWidth = canvas.width;
+        const currentHeight = canvas.height;
+
+        // Calculate scale to fit within target size while maintaining aspect ratio
+        const scale = Math.min(targetSize / currentWidth, targetSize / currentHeight);
+
+        // Always create square canvas
+        const newWidth = Math.round(currentWidth * scale);
+        const newHeight = Math.round(currentHeight * scale);
+
+        // Create a SQUARE canvas with target size
+        const resizeCanvas = document.createElement('canvas');
+        resizeCanvas.width = targetSize;
+        resizeCanvas.height = targetSize;
+        const resizeCtx = resizeCanvas.getContext('2d')!;
+
+        // Use high-quality image smoothing
+        resizeCtx.imageSmoothingEnabled = true;
+        resizeCtx.imageSmoothingQuality = 'high';
+
+        // Calculate position to center the image on square canvas
+        const offsetX = (targetSize - newWidth) / 2;
+        const offsetY = (targetSize - newHeight) / 2;
+
+        // Draw resized image centered
+        resizeCtx.drawImage(canvas, 0, 0, currentWidth, currentHeight, offsetX, offsetY, newWidth, newHeight);
+
+        return resizeCanvas.toDataURL('image/png');
     }
 
     return canvas.toDataURL('image/png');
